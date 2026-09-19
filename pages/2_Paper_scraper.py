@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 import io
 import time
 import os
+os.environ["MODAL_TOKEN_ID"] = st.secrets["MODAL_TOKEN_ID"]
+os.environ["MODAL_TOKEN_SECRET"] = st.secrets["MODAL_TOKEN_SECRET"]
 import re
 import json
 from urllib.parse import urljoin
