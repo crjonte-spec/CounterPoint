@@ -8,7 +8,7 @@ from datetime import datetime
 
 # --- 1. PAGE SETUP & STATE INITIALIZATION ---
 
-st.set_page_config(page_title="Keyword Maker", layout="wide")
+st.set_page_config(page_title="Counterpoint", layout="wide")
 st.title(" AI Keyword Generator Workspace")
 
 # --- CLOUD DATABASE SETUP ---
