@@ -7,3 +7,4 @@ cloudscraper
 beautifulsoup4
 playwright
 ollama
+lxml
