@@ -1,0 +1,10 @@
+streamlit
+modal
+supabase
+openai
+requests
+cloudscraper
+beautifulsoup4
+playwright
+ollama
+lxml
