@@ -33,10 +33,10 @@ except Exception as e:
     st.stop()
 
 
-st.set_page_config(page_title="Debate Hub Workspace", layout="wide")# again wide layout so it fills the whole page
+st.set_page_config(page_title="Counterpoint", layout="wide")
 
 st.title("Debate Evidence Ranking & Workspace")
-st.caption("Sort, filter, and inspect your AI-graded academic cards for instant evidence cutting.")# make acaption to explain what it does
+st.caption("Sort, filter, and inspect your AI-graded academic cards for instant evidence cutting.")
 st.divider()
 
 
@@ -44,7 +44,6 @@ if "session_id" not in st.session_state:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     st.session_state.session_id = f"{current_time}_{str(uuid.uuid4())}"
 
-#st.session_state.session_id = "2026-08-20_14-20-07_32cd9074-bcd5-4b6d-9ce2-a960e4d03648"
 
 session = st.session_state.session_id
 
@@ -102,7 +101,7 @@ def execute_sorting():
     except Exception as e:
             st.error(f"[!] Could not find optimized database in cloud for this session. Run Context Optimizer first! Error: {e}")
 
-    papers.sort(key=debate_sort_key, reverse=True) # we now sort all the json papers by running them through the sort key then reversing so we got the top to bottem
+    papers.sort(key=debate_sort_key, reverse=True)
 
     try:
             graded_json = json.dumps(papers, indent=4, ensure_ascii=False)
@@ -118,21 +117,21 @@ def execute_sorting():
         st.error(f"[!] Failed to upload to Supabase: {e}") 
             
     
-    return len(papers) # return the length so we can write a message to thuser tellign what happened
+    return len(papers) 
 
 
-# ==========================================
+
 # SIDEBAR: CONTROLS
-# ==========================================
+# Allows the user to choosed how many papers to show and what side to show.
 with st.sidebar:
     st.header(" Pipeline Controls")
     
-    if st.button("Rank & Sort Cards", type="primary", use_container_width=True): # make the soting button that runs the sorting and put it on  a sidebar
+    if st.button("Rank & Sort Cards", type="primary", use_container_width=True): 
         with st.spinner("Re-indexing database by utility..."):
             count = execute_sorting() 
             if count:
                 st.success(f"Sorted {count} papers successfully!")
-                st.toast("Database updated!", icon="🔥") # tell the user its a success
+                st.toast("Database updated!", icon="🔥")
                 
     st.divider()
     st.subheader(" Display Configuration")
@@ -147,7 +146,7 @@ with st.sidebar:
         total_papers = len(temp_papers)
         
         if total_papers > 1:
-            num_to_show = st.slider( # make a slider so the user cna pick how many papers is shown
+            num_to_show = st.slider( 
                 "Show Top Ranked Papers", 
                 min_value=1, 
                 max_value=total_papers, 
@@ -166,9 +165,9 @@ with st.sidebar:
         st.stop()
 
 
-# ==========================================
+
 # BACKGROUND DATA MAPPING
-# ==========================================
+
 papers = temp_papers
 database_by_title = {}
 try:
@@ -182,7 +181,7 @@ except Exception as e:
  # we gotta take from the LLM ready data base to get titles so we dont rely on AI titles.
 if db_data:
     for entry in db_data:
-        clean_title_key = "".join(c for c in entry.get("title", "").lower() if c.isalnum())# get all the titles lowercase them and only join them if ther alphanumeric
+        clean_title_key = "".join(c for c in entry.get("title", "").lower() if c.isalnum())
         database_by_title[clean_title_key] = entry
     
 
@@ -211,7 +210,7 @@ elif selected_stance == "Opposition":
             selected_stance_papers.append(paper)
 else: selected_stance_papers = papers
 
-for idx, paper in enumerate(selected_stance_papers[:num_to_show], start=1):# tkae he first num to show papers and fetch all the stuff we want to display that Deepseek generated
+for idx, paper in enumerate(selected_stance_papers[:num_to_show], start=1):
     title = paper.get("paper_title", "Untitled Paper")
     stance = paper.get("overall_paper_stance", "Unknown Stance")
     brief = paper.get("strategy_brief", "No strategy brief provided.")
@@ -224,36 +223,36 @@ for idx, paper in enumerate(selected_stance_papers[:num_to_show], start=1):# tka
     methodology = scores.get("methodology_strength", 0)
     
     # Pull new dynamic values (safely)
-    lay = scores.get("lay_persuasiveness", 0) # just pulling more of the data
+    lay = scores.get("lay_persuasiveness", 0) 
     directness = scores.get("resolution_directness", 0)
     
     # Calculate and display a display-only weighted Debate score
-    debate_score = (lay * 0.35) + (directness * 0.30) + (utility * 0.20) + (relevance * 0.15)# recalculate here because it was a local variable before 
+    debate_score = (lay * 0.35) + (directness * 0.30) + (utility * 0.20) + (relevance * 0.15)
     
     st.markdown(f"#### {idx}. {title}")
     
     # Row 1: Academic Rigor Metrics
-    m1, m2, m3 = st.columns(3) # this lets us eaily but utility revelance etc in 3 by 2s by using steamlits colums.
+    m1, m2, m3 = st.columns(3) 
     m1.metric("Overall Utility", f"{utility}/10")
     m2.metric("Topic Relevance", f"{relevance}/10")
     m3.metric("Impact Magnitude", f"{impact}/10")
     
     # Row 2: Debate-Centric Strategic Metrics
-    m4, m5, m6 = st.columns(3) # this is more of the same just put below so it looks like its all one thing
+    m4, m5, m6 = st.columns(3) 
     m4.metric("Methodology", f"{methodology}/10")
     m5.metric("Lay Persuasiveness", f"{lay}/10")
     m6.metric("Directness", f"{directness}/10")
     
     # Display the custom calculated Debate Composite Score
-    st.write(f"🏆 **Debate-First Composite Score:** `{debate_score:.2f}/10.00`") # have a thing for jsut the debate sore
-    st.markdown(f"**Core Stance:** `{stance}`")# tell the user the stance of the paper
+    st.write(f"🏆 **Debate-First Composite Score:** `{debate_score:.2f}/10.00`") 
+    st.markdown(f"**Core Stance:** `{stance}`")
     st.write(brief)
     
     if strength:
-        st.markdown(f"ℹ️ *{strength}*")# if its an elite paper with a methidology strength not that too
+        st.markdown(f"ℹ️ *{strength}*")
     
     # 1. Expandable Debate Cards
-    cards = paper.get("debate_cards", []) # this is a dropdown for the user to view the cards if theres no cards it hanled that  it gets the car stands tagline nad quote to show
+    cards = paper.get("debate_cards", []) 
     with st.expander(f"View Cut Cards ({len(cards)})"):
         if not cards:
             st.write("*No cards extracted for this item (classified as low relevance or technical).*") 
@@ -267,7 +266,6 @@ for idx, paper in enumerate(selected_stance_papers[:num_to_show], start=1):# tka
                 st.info(quote)
     
     # 2. Dynamic Full Paper Viewer & PDF Downloader
-    # 2. Dynamic Full Paper Viewer & PDF Downloader
     clean_paper_title = "".join(c for c in title.lower() if c.isalnum())
     db_entry = database_by_title.get(clean_paper_title)
     
@@ -280,7 +278,7 @@ for idx, paper in enumerate(selected_stance_papers[:num_to_show], start=1):# tka
             st.markdown("---")
             st.markdown("**Cleaned Full-Text Body (With Injected Citations):**")
             
-            # make a text area with all the text get the doby from DB entry
+            
             st.text_area(
                 label="Cleaned Body Text",
                 value=db_entry.get("body", "No text body available."),

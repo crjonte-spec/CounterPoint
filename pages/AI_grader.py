@@ -14,8 +14,8 @@ from datetime import datetime
 from openai import OpenAI
 
 
-# --- 1. PAGE SETUP & UI ---
-st.set_page_config(page_title="Context Optimizer", layout="wide")
+
+st.set_page_config(page_title="Counterpoint", layout="wide")
 st.title("Context Optimizer & AI Grader")
 
 topic = st.session_state.get("saved_topic", "Nuclear power deployment and energy policy")
@@ -32,11 +32,11 @@ if "session_id" not in st.session_state:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     st.session_state.session_id = f"{current_time}_{str(uuid.uuid4())}"
 
-#st.session_state.session_id = "2026-08-20_14-20-07_32cd9074-bcd5-4b6d-9ce2-a960e4d03648"
+
 
 session = st.session_state.session_id
 
-#CONFIG like what llama to use grobids url where to put files ect
+
 with st.sidebar:
     dry_run = st.checkbox("Dry Run Mode (Process 1 paper only)", value=True)
     st.divider()
@@ -68,14 +68,13 @@ with st.sidebar:
     selected_provider = st.selectbox("Choose AI Provider:", options=list(PROVIDER_CONFIGS.keys()))
     config = PROVIDER_CONFIGS[selected_provider]
     provider_url = config["url"]
-    # Allow custom model typing or override if desired
     active_model = st.text_input("Model ID", value=config["model"])
     user_api_key = st.text_input("API Key", type="password").strip()
     
     
 
     with st.expander("Advanced: Edit System Prompts"):
-        SYSTEM_PROMPT = st.text_area(# this creats an expander where the user can edit the system prompt for deep seek
+        SYSTEM_PROMPT = st.text_area(
         "SYSTEM_PROMPT", 
         value="""
 You are an elite, uncompromising policy debate coach and data validator. Your sole objective is to read academic papers and extract VERBATIM debate cards for the topic.
@@ -140,13 +139,13 @@ Respond ONLY with a valid JSON object matching this exact structure:
     }
   ]
 }
-""",# i cant do ntoes like this on the prompt itself but feel free to ask questions!
+""",
         height=500
     )
 
 
     with st.expander("Advanced: Edit System Prompts"):
-        gold_mine_prompt = st.text_area(# this creats an expander where the user can edit the system prompt for deep seek
+        gold_mine_prompt = st.text_area(
             "GOLD_MINE_PROMPT", 
             value=  """
     You are an elite debate coach. I am handing you an academic paper that has already been verified as highly relevant. 
@@ -169,104 +168,96 @@ Respond ONLY with a valid JSON object matching this exact structure:
             height=500
         )
 
-log_queue = queue.Queue() # this makes the log queue a waiting room for the workers for them to put there stuff in there to wait to be safley put on the streamlit screen for the user
-
+log_queue = queue.Queue() 
 def log_message(msg):
     """Prints to terminal and logs to UI queue."""
     print(msg)
-    log_queue.put(msg) # this puts the message in the "waiting room" to be later displayed for streamlit. A loop later down the line will constatly check this to display it for the user.
+    log_queue.put(msg)
 
 
-
-# =========================================================================
-# PHASE 3: OPTIMIZER HELPER FUNCTIONS
-# =========================================================================
 def build_citation_map(soup):
-    citation_map = {} # we need to build citation map to replace grobidfes b03 of whatever bibiography ids with instead the specific source where it game from EG smith 2019. this makes it so deepseek can know exactly who had what data.
-    for bibl in soup.find_all('biblStruct'):# find the biblstuct wich is what grobid calles its bibliiographies
-        bib_id = bibl.get('xml:id') # get the id of that specific papers
-        if not bib_id: # if it has no id skip
+    citation_map = {} 
+    for bibl in soup.find_all('biblStruct'):
+        bib_id = bibl.get('xml:id') 
+        if not bib_id: 
             continue
             
         author = "Unknown Author"
-        author_tag = bibl.find('author') # fin the author by first looking for the auther tag then look at the surname section and set the author eaqueat to the surname
+        author_tag = bibl.find('author') 
         if author_tag and author_tag.find('surname'):
             author = author_tag.find('surname').text.strip()
             
         year = "Unknown Year"
-        date_tag = bibl.find('date') # try to find the date tag
-        if date_tag and date_tag.get('when'): # if theres a dat tage and a when(what year) then take the first 4 charators(the year eg 2016)
+        date_tag = bibl.find('date') 
+        if date_tag and date_tag.get('when'): 
             year = date_tag.get('when')[:4]
             
         title = "Unknown Title"
-        title_tag = bibl.find('title') # thne try to find the title
-        if title_tag: # if it exists set the title to the title tag
+        title_tag = bibl.find('title') 
+        if title_tag: 
             title = title_tag.text.strip()
             
-        citation_map[bib_id] = f"{author}, {year} - '{title}'" # make an entry in the citation map dictionary with this specific bibl id haveing the uathor year and title
-    return citation_map # finally return this dictionary.
+        citation_map[bib_id] = f"{author}, {year} - '{title}'" 
+    return citation_map 
 
 def extract_title(soup, filename):
-    analytic = soup.find('analytic')# grobid puts the title in the analytic field so we have to reach in there to get the title.
+    analytic = soup.find('analytic')
     if analytic:
-        title_tag = analytic.find('title', level='a', type='main') or analytic.find('title', level='a') # use the a to go to the anylitical level so i get the paper and not the journal then the main grabs the main title not the sub title
+        title_tag = analytic.find('title', level='a', type='main') or analytic.find('title', level='a') 
         if title_tag and title_tag.text.strip():
-            return title_tag.text.strip() # if it works return the title
+            return title_tag.text.strip() 
             
-    title_stmt = soup.find('titleStmt')# if the above doesnt work try looking in a place called title stmt
+    title_stmt = soup.find('titleStmt')
     if title_stmt:
-        title_tag = title_stmt.find('title', type='main') or title_stmt.find('title') # if it existes try to find the titles it might be type main if not just search for title
+        title_tag = title_stmt.find('title', type='main') or title_stmt.find('title') 
         if title_tag and title_tag.text.strip():
-            return title_tag.text.strip() # finally return that title
+            return title_tag.text.strip() 
             
-    return filename.replace("_output.xml", "").replace(".xml", "").replace("_", " ").strip() # if all else fails take the file name and remove all the stuff to reverse engineer the title fro mthe file name
+    return filename.replace("_output.xml", "").replace(".xml", "").replace("_", " ").strip() 
 
 def clean_and_inject_citations(element, citation_map):
     ''' this is where the citaiont map pays off and  elements are replaced with there real citations eg smith 2016 '''
     if not element:
-        return ""# if therse no element return nothing
+        return ""
         
-    for ref in element.find_all('ref', type='bibr'):# then find all the refrence notes grobid left
-        target = ref.get('target') # i know the target is the right thing but what is the target?
-        if target and target.startswith('#'): # if it starts with # then its a internal link
-            bib_id = target[1:] # then take everything from index 1 on to remove the #
-            if bib_id in citation_map: # if the bib id is in our citation map then replace it with thie source so deepseek can read it easily
+    for ref in element.find_all('ref', type='bibr'):
+        target = ref.get('target') 
+        if target and target.startswith('#'): 
+            bib_id = target[1:] 
+            if bib_id in citation_map: 
                 ref.replace_with(f" [SOURCE: {citation_map[bib_id]}] ")
             else:
-                ref.replace_with(f" [{ref.text}] ") # else leave it how it is?
+                ref.replace_with(f" [{ref.text}] ") 
                 
     text = element.get_text(separator=' ', strip=True)
-    text = re.sub(r'\(\d{1,3}\)', '', text) # remove number fragments that grobid left behind
-    text = re.sub(r'\s\d{1,3}\)\s', ' ', text) # removes framents like 12) from grobid
-    text = re.sub(r'doi:\s*10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+', '', text, flags=re.IGNORECASE)# remove random DOIs to make it more readable for the AI
-    return re.sub(r'\s{2,}', ' ', text).strip() # removes 2 or more spaces in a row
+    text = re.sub(r'\(\d{1,3}\)', '', text) 
+    text = re.sub(r'\s\d{1,3}\)\s', ' ', text) 
+    text = re.sub(r'doi:\s*10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+', '', text, flags=re.IGNORECASE)
+    return re.sub(r'\s{2,}', ' ', text).strip() 
 
 def parse_table_to_markdown(table_tag):
     """Converts a GROBID XML table into a clean, LLM-readable Markdown string."""
-    if not table_tag: # if there no table tag return nothing
+    if not table_tag:
         return ""
 
-    markdown_table = [] # make a mardown table so we can write this  table in markdown so AI cna read it
-    # GROBID uses <row> and <cell> for its TEI-XML tables
-    rows = table_tag.find_all('row')# take the table and find each row
+    markdown_table = [] 
+    rows = table_tag.find_all('row')
     
     for i, row in enumerate(rows):
-        cells = row.find_all('cell')# Cells are the inbeeded things in each row
-        # Clean the text inside each cell
-        row_data = [cell.get_text(separator=" ", strip=True) for cell in cells]# does this loop through each cell strip them and seperate them with a space?
-        markdown_table.append("| " + " | ".join(row_data) + " |") # puts a starting | then joins each one with a | to format it as a cell
+        cells = row.find_all('cell')
+        row_data = [cell.get_text(separator=" ", strip=True) for cell in cells]
+        markdown_table.append("| " + " | ".join(row_data) + " |") 
         
-        # Add the Markdown header separator after the first row
+        
         if i == 0:
-            markdown_table.append("|" + "|".join(["---"] * len(cells)) + "|")# makes the headers have seperation so the AI can see that
+            markdown_table.append("|" + "|".join(["---"] * len(cells)) + "|")
             
-    return "\n".join(markdown_table) # return our formatted table
+    return "\n".join(markdown_table) 
 
 def process_papers(active_session):
     log_message(f"[*] Accessing Supabase Storage for session: '{active_session}'...")
 
     try:
-        # List all files in the session folder
         file_objects = supabase.storage.from_("paper_xmls").list(active_session,
         {"limit": 1000, "offset": 0}
 )
@@ -275,7 +266,7 @@ def process_papers(active_session):
         log_message(f"[!] Supabase Storage Access Error: {e}")
         return
 
-    # Filter for XMLs
+    
     xml_files = [f for f in file_objects if f.get("name", "").endswith(".xml")]
 
     if not xml_files:
@@ -290,11 +281,11 @@ def process_papers(active_session):
         log_message(f"  [-] Optimizing [{idx}/{len(xml_files)}]: {filename[:50]}...")
         
         try:
-            # 1. Download XML from Supabase into memory
+            
             file_bytes = supabase.storage.from_("paper_xmls").download(f"{active_session}/{filename}")
             soup = BeautifulSoup(file_bytes.decode('utf-8'), 'xml')
 
-            # 2. Clean and Parse
+            
             for tag in soup.find_all(['note']): tag.decompose()
             citation_map = build_citation_map(soup)
             title = extract_title(soup, filename)
@@ -326,7 +317,7 @@ def process_papers(active_session):
         except Exception as e:
             log_message(f"  [!] Failed to process '{filename}': {e}")
 
-    # 3. UPLOAD THE OPTIMIZED JSON BACK TO SUPABASE
+    
     log_message("\n[*] Uploading optimized database back to Supabase cloud...")
     try:
         json_data = json.dumps(database, indent=4, ensure_ascii=False)
@@ -340,7 +331,7 @@ def process_papers(active_session):
         log_message(f"[!] Failed to upload to Supabase: {e}")
 
 
-# Phase 4 AI grader
+
 
 def grade_papers_with_ai(active_session, api_key, provider_url, model_name):
     if not api_key:
@@ -352,7 +343,7 @@ def grade_papers_with_ai(active_session, api_key, provider_url, model_name):
         log_message("[!] Error: API Key is empty! Check your sidebar input.")
         return
 
-    # Initialize the OpenAI client dynamically using the selected provider's URL
+    
     client = OpenAI(api_key=clean_key, base_url=provider_url)
 
     try:
@@ -369,7 +360,7 @@ def grade_papers_with_ai(active_session, api_key, provider_url, model_name):
     final_results = []
 
     for idx, paper in enumerate(papers):
-        title = paper.get('title', 'Unknown Title')# take out the title filname and the bofy text
+        title = paper.get('title', 'Unknown Title')
         filename = paper.get('filename', 'Unknown_File.xml')
         raw_text = paper.get('body', '')
 
@@ -377,49 +368,49 @@ def grade_papers_with_ai(active_session, api_key, provider_url, model_name):
         if len(raw_text) > 60000:
             safe_text = raw_text[:60000]
         user_content = f"DEBATE RESOLUTION:\n{topic}\n\nPAPER TITLE:\n{title}\n\nPAPER TEXT:\n{safe_text}"
-        last_error = None# hold the last error to tell wht went down if all fails
+        last_error = None
         for attempt in range(1, 2 + 2):
             log_message(f"[*] Sending to DeepSeek ({attempt}/{2 + 1}): '{title[:60]}...'")
             try:
-                response = client.chat.completions.create( # we attempt to get a reasponse from the client with the use and system prompt
+                response = client.chat.completions.create( 
                     model=model_name,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": user_content}
                     ],
-                    response_format={"type": "json_object"}, # it must be json this tells the AI to use jsomn
-                    temperature=0,#temp 0 for objectivity
-                    max_tokens=4000 # Force it to keep cards concise to avoid JSON cut-offs
+                    response_format={"type": "json_object"}, 
+                    temperature=0,
+                    max_tokens=4000 
                 )
                 
-                raw_response = response.choices[0].message.content # take just deepseeks reasponse nothing else
+                raw_response = response.choices[0].message.content 
                 
                 try:
                     ai_data = json.loads(raw_response)
                     
-                    # INJECT METADATA SAFELY IN PYTHON (Never trust the LLM to do this)
-                    ai_data["source_filename"] = filename # again dont trust the llm so we get the eaxt name and title
+                    
+                    ai_data["source_filename"] = filename 
                     ai_data["original_title"] = title 
                     score = ai_data.get("scores", {}).get("overall_utility_score", 0)
                     gold_cards = ai_data["debate_cards"]
                     if score >= 8:
                         user_content = f"DEBATE RESOLUTION:\n{topic}\n\nPAPER TITLE:\n{title}\n\nPAPER TEXT:\n{safe_text} EXISTING CARDS: \n{gold_cards}"
-                        last_error = None# hold the last error to tell wht went down if all fails
+                        last_error = None
                         for attempt in range(1, 2 + 2):
-                                log_message(f"[*] Sending to DeepSeek ({attempt}/{2 + 1}): '{title[:60]}...'")# tell the user we are senging to deepseek
+                                log_message(f"[*] Sending to DeepSeek ({attempt}/{2 + 1}): '{title[:60]}...'")
                                 try:
-                                    response = client.chat.completions.create( # we attempt to get a reasponse from the client with the use and system prompt
+                                    response = client.chat.completions.create( 
                                         model=model_name,
                                         messages=[
                                             {"role": "system", "content": gold_mine_prompt},
                                             {"role": "user", "content": user_content}
                                         ],
-                                        response_format={"type": "json_object"}, # it must be json this tells the AI to use jsomn
-                                        temperature=0,#temp 0 for objectivity
-                                        max_tokens=4000 # Force it to keep cards concise to avoid JSON cut-offs
+                                        response_format={"type": "json_object"}, 
+                                        temperature=0,
+                                        max_tokens=4000 
                                     )
                                     
-                                    raw_response = response.choices[0].message.content # take just deepseeks reasponse nothing else
+                                    raw_response = response.choices[0].message.content 
                                     
                                     try:
                                         ai_data2 = json.loads(raw_response)
@@ -432,33 +423,33 @@ def grade_papers_with_ai(active_session, api_key, provider_url, model_name):
                                         raise ValueError("DeepSeek's response was too long and the JSON got cut off mid-sentence.")
                       
                                 except Exception as e:
-                                            last_error = str(e) # why have this last error part?
+                                            last_error = str(e) 
                                             log_message(f"[!] Attempt {attempt} failed for '{title[:40]}': {e}")
                                             if attempt <= 2:
-                                                backoff = 5 * attempt # rety after  backoff*5 seconds
+                                                backoff = 5 * attempt 
                                                 log_message(f"    Retrying in {backoff}s...")
-                                                time.sleep(backoff) # backoff to let the API cool off
+                                                time.sleep(backoff) 
                          
 
-                    final_results.append(ai_data) # return the data finally
+                    final_results.append(ai_data) 
                     log_message(f"  [✓] Success! Graded: {title[:30]}")
                     break
                 except json.JSONDecodeError:
                     raise ValueError("DeepSeek's response was too long and the JSON got cut off mid-sentence.")
     
             except Exception as e:
-                last_error = str(e) # why have this last error part?
+                last_error = str(e) 
                 log_message(f"[!] Attempt {attempt} failed for '{title[:40]}': {e}")
                 if attempt <= 4:
-                    backoff = 5 * attempt # rety after  backoff*5 seconds
+                    backoff = 5 * attempt 
                     log_message(f"    Retrying in {backoff}s...")
-                    time.sleep(backoff) # backoff to let the API cool off
+                    time.sleep(backoff) 
     # --- SAVE TO CLOUD ---
     log_message("\n[*] Uploading graded debate cards back to Supabase cloud...")
     try:
         graded_json = json.dumps(final_results, indent=4, ensure_ascii=False)
         
-        # Upload the master list to the active session folder
+        
         supabase.storage.from_("paper_xmls").upload(
             path=f"{active_session}/extracted_debate_cards.json",
             file=graded_json.encode("utf-8"),
@@ -469,20 +460,18 @@ def grade_papers_with_ai(active_session, api_key, provider_url, model_name):
         log_message(f"[!] Failed to upload to Supabase: {e}")  
             
 
-# =========================================================================
-# UI INTERACTION LAYOUT
-# =========================================================================
-col1, col2 = st.columns(2) # create 2 collums 1 for snowball and 1 for context optimizing
+
+col1, col2 = st.columns(2) 
 
 with col1:
     st.write("### Step 1: Package Data for AI")
     run_optimize = st.button("Context Optimize", type="secondary", use_container_width=True)
 
-with col2: # make a clear context optimize button for the user to use
+with col2: 
     st.write("### Step 2 AI grader: Send to an AI  for grading.")
     run_grader = st.button("AI grade", type = "secondary", use_container_width=True)
 
-st.write("###  Real-Time Pipeline Progress") # tell the user that we will track it real time and set the log placeholder an empty strealit text
+st.write("###  Real-Time Pipeline Progress") 
 log_placeholder = st.empty()
 
 
@@ -490,13 +479,13 @@ log_placeholder = st.empty()
 if run_optimize:
     log_message("★ PHASE 3: THE CONTEXT OPTIMIZER ★")
     
-    # Grab the session ID on the main thread, then pass it to the background worker
+    
     current_session = st.session_state.session_id
     optimizer_thread = threading.Thread(target=process_papers, args=(current_session,)) 
     optimizer_thread.start()
     
     displayed_lines = []
-    max_lines_on_screen = 25# set the displaty limit
+    max_lines_on_screen = 25
     
     while optimizer_thread.is_alive() or not log_queue.empty(): 
         while not log_queue.empty():
@@ -509,15 +498,15 @@ if run_optimize:
         if len(displayed_lines) > max_lines_on_screen:
             displayed_lines = displayed_lines[-max_lines_on_screen:]
         
-        log_placeholder.code("\n".join(displayed_lines), language="text")# 
-        time.sleep(0.2)#pause si ut doesnt try to do like like 1million times so the user can see it celarly
-    optimizer_thread.join()# what .join? what does this do?
-    st.success(f" Optimization Complete! Context generated and ready for grading!")# thne tell the sucsess.
+        log_placeholder.code("\n".join(displayed_lines), language="text")
+        time.sleep(0.2)
+    optimizer_thread.join()
+    st.success(f" Optimization Complete! Context generated and ready for grading!")
 
 if run_grader:
     log_message("★ PHASE 4: THE AI GRADER ★")
     
-    # Run in a background thread so the UI doesn't freeze!
+    
     grader_thread = threading.Thread(
         target=grade_papers_with_ai, 
         args=(session, user_api_key, provider_url, active_model)

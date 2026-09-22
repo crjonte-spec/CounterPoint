@@ -23,7 +23,7 @@ import time
 
 if 'start_time' not in st.session_state:
     st.session_state.start_time = None
-# --- CLOUD DATABASE SETUP ---
+
 try:
     supabase_url = st.secrets["connections"]["supabase"]["SUPABASE_URL"]
     supabase_key = st.secrets["connections"]["supabase"]["SUPABASE_KEY"]
@@ -34,16 +34,15 @@ except Exception as e:
 
 MODEL = "openai/gpt-oss-20b"
 
-# Ensure we have a session ID
 if "session_id" not in st.session_state:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     st.session_state.session_id = f"{current_time}_{str(uuid.uuid4())}"
 
-# --- 1. PAGE SETUP & UI ---
-st.set_page_config(page_title="Argument Flow", layout="wide")
+
+st.set_page_config(page_title="Counterpoint", layout="wide")
 st.title(" My Evidence Tracker & Scraper")
 
-# --- CUSTOM CSS ---
+
 st.markdown(
     """
     <style>
@@ -57,10 +56,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Safe topic fallback handling
+
 topic = st.session_state.get("saved_topic", "Nuclear power deployment and energy policy")
 
-# --- Base Prompts ---
+
 base_verfication_prompt = """Task: Does the following academic paper evaluate, discuss, or contain evidence regarding nuclear power, nuclear energy, small modular reactors (SMRs), energy policy, public perception, economics, or nuclear risk/governance?
 
 Guidelines:
@@ -75,7 +74,7 @@ Response:"""
 base_anchor_search_input = '("nuclear power" OR "nuclear energy" OR "small modular reactor" OR "SMR") AND ("meta-analysis" OR "systematic review" OR "techno-economic" OR "comprehensive review") NOT ("cellular" OR "genome" OR "protein" OR "patient" OR "clinical" OR "parton" OR "quantum")'
 
 
-# Initialize prompt in session state if not present
+
 if "generated_prompt" not in st.session_state:
     st.session_state.generated_prompt = base_verfication_prompt
 
@@ -84,7 +83,6 @@ if "generated_filter" not in st.session_state:
 
 
 
-# Notice double brackets {{title}} and {{abstract}} so .format(topic=topic) doesn't throw a KeyError!
 verfication_prompt_maker_prompt_template = """You are an expert prompt engineer. Your task is to rewrite the verification prompt below so it is directly related to this new topic: "{topic}"
 
 INSTRUCTIONS:
@@ -236,7 +234,7 @@ with st.sidebar:
             st.error(" Invalid JSON Format! Falling back to default journal configurations.")
             DEBATE_SECTORS = json.loads(default_sectors_json)
 
-# Keyword Management UI
+
 selected_keywords = []
 with st.spinner("Fetching keywords from cloud database..."):
     response = supabase.table("user_keywords").select("keyword").eq("session_id", st.session_state.session_id).execute()
@@ -253,16 +251,14 @@ else:
 
 st.divider()
 
-# --- MAIN PIPELINE EXECUTION ---
+
 if "is_running" not in st.session_state:
     st.session_state.is_running = False
 
-# 2. Dynamic button placeholder
+
 button_placeholder = st.empty()
 
-# ==========================================
-# STATE A: IDLE (SHOW START BUTTON)
-# ==========================================
+
 if not st.session_state.is_running:
     if button_placeholder.button(" Start Scraping Pipeline", type="primary"):
         if not selected_keywords:
@@ -274,23 +270,21 @@ if not st.session_state.is_running:
 
         st.session_state.start_time = time.time()
 
-        # Update Supabase to 'running'
+        
         supabase.table("run_status").upsert({
             "session_id": st.session_state.session_id, 
             "status": "running"
         }).execute()
         
-        # Swap button state and reload UI
+        
         st.session_state.is_running = True
         st.rerun()
 
-# ==========================================
-# STATE B: RUNNING (SHOW STOP BUTTON)
-# ==========================================
+
 else:
-    # Button is now swapped to the Emergency Stop!
+    
     if button_placeholder.button("🚨 Emergency Stop Pipeline", use_container_width=True):
-        # Update Supabase to 'killed'
+        
         if st.session_state.start_time:
             elapsed = time.time() - st.session_state.start_time
             mins = int(elapsed // 60)
@@ -348,8 +342,8 @@ else:
             
             if update["type"] == "error":
                 st.error(update["message"])
-                st.session_state.is_running = False # <--- PREVENTS THE TRAP!
-                button_placeholder.empty()          # <--- CLEARS THE STOP BUTTON
+                st.session_state.is_running = False 
+                button_placeholder.empty()          
                 st.stop()
                 
             elif update["type"] == "ui":
