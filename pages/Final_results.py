@@ -46,7 +46,7 @@ if "session_id" not in st.session_state:
 
 
 session = st.session_state.session_id
-
+session = "2026-09-26_20-31-10_bb40bf04-9e9d-4d17-94b8-3113c8807a2f"
 try:
         file_bytes = supabase.storage.from_("paper_xmls").download(f"{session}/extracted_debate_cards.json")
         papers = json.loads(file_bytes.decode("utf-8"))
